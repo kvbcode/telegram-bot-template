@@ -1,5 +1,6 @@
 package com.cyber;
 
+import com.cyber.util.command.CommandHandler;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.api.methods.AnswerCallbackQuery;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
@@ -13,13 +14,17 @@ import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
 import java.io.File;
 import java.util.Arrays;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class MyTelegramBot extends TelegramLongPollingBot {
 
     private final String securityToken;
     private final String name;
+    private Map<Long,Integer> lastMessageIdMap = new ConcurrentHashMap<>();
 
-    private int lastMenuMessageId = 0;
+    private CommandHandler<Message> textMessageHandler = new CommandHandler<>();
+    private CommandHandler<CallbackQuery> callbackQueryHandler = new CommandHandler<>();
 
     public MyTelegramBot(String name) {
         super();
@@ -50,12 +55,33 @@ public class MyTelegramBot extends TelegramLongPollingBot {
             }
 
             if (update.hasMessage()) {
-                onMessage(update.getMessage());
+                Message msg = update.getMessage();
+                if (msg.hasText()) {
+                    onTextMessage(msg);
+                }
                 return;
             }
         } catch (TelegramApiException ex) {
             ex.printStackTrace();
+        } catch (Exception ex) {
+            ex.printStackTrace();
         }
+    }
+
+    public void saveLastMessageId(Long chatId, Integer messageId) {
+        lastMessageIdMap.put(chatId, messageId);
+    }
+
+    public Integer getLastMesageId(Long chatId){
+        return lastMessageIdMap.get(chatId);
+    }
+
+    public CommandHandler<Message> getTextMessageHandler() {
+        return textMessageHandler;
+    }
+
+    public CommandHandler<CallbackQuery> getCallbackQueryHandler() {
+        return callbackQueryHandler;
     }
 
     protected void onCallbackQuery(CallbackQuery callbackQuery) throws TelegramApiException {
@@ -82,12 +108,12 @@ public class MyTelegramBot extends TelegramLongPollingBot {
                     .keyboardRow(Arrays.asList(backButton))
                     .build();
 
-            updateMessage(chatId, lastMenuMessageId, "Демонстрация подменю", submenuMarkup);
+            updateMessage(chatId, getLastMesageId(chatId), "Демонстрация подменю", submenuMarkup);
             return;
         }
 
         if ("but:rootmenu".equals(command)) {
-            updateMessage(chatId, lastMenuMessageId, "Нажмите на кнопки ниже, чтобы проверить реакцию на события.", rootMenuMarkup());
+            updateMessage(chatId, getLastMesageId(chatId), "Нажмите на кнопки ниже, чтобы проверить реакцию на события.", rootMenuMarkup());
             return;
         }
 
@@ -98,52 +124,19 @@ public class MyTelegramBot extends TelegramLongPollingBot {
 
     }
 
-    protected void sendImageFile(Long chatId, String filename) throws TelegramApiException {
+    public void sendImageFile(Long chatId, String filename) throws TelegramApiException {
         InputFile inputFile = new InputFile(new File("img/" + filename), filename);
-
-        SendPhoto sendPhoto = SendPhoto.builder()
+        execute(SendPhoto.builder()
                 .chatId(chatId)
                 .photo(inputFile)
-                .build();
-
-        execute(sendPhoto);
+                .build());
     }
 
-    protected void onMessage(Message msg) throws TelegramApiException {
-        System.out.println("Incoming message from " + msg.getFrom().toString());
-
-        if (msg.hasText()) {
-            String msgText = msg.getText();
-
-            if ("/start".equals(msgText)) {
-                onStart(msg);
-                return;
-            }
-
-            if ("/menu".equals(msgText)) {
-                SendMessage message = new SendMessage();
-                message.setChatId(msg.getChatId());
-                message.setText("Нажмите на кнопки ниже, чтобы проверить реакцию на события.");
-                message.setReplyMarkup(rootMenuMarkup());
-
-                Message result = execute(message);
-                System.out.println("menu message last id: " + result.getMessageId());
-                lastMenuMessageId = result.getMessageId();
-                return;
-            }
-
-            String userName = formatUserName(msg.getFrom());
-            System.out.println(userName + ": " + msg.getText());
-
-            execute(SendMessage.builder()
-                    .chatId(msg.getChatId())
-                    .text(msg.getText())
-                    .build()
-            );
-        }
+    protected void onTextMessage(Message msg) throws Exception {
+        textMessageHandler.invoke(msg.getText(), msg);
     }
 
-    protected InlineKeyboardMarkup rootMenuMarkup() {
+    public InlineKeyboardMarkup rootMenuMarkup() {
         InlineKeyboardButton helloButton = InlineKeyboardButton.builder()
                 .text("Hello").callbackData("but:hello").build();
 
@@ -165,23 +158,12 @@ public class MyTelegramBot extends TelegramLongPollingBot {
         return keyboardMarkup;
     }
 
-    protected void onStart(Message msg) throws TelegramApiException {
-        String userName = formatUserName(msg.getFrom());
-        String onStartText = "Привет " + userName + ". Добро пожаловать к MyTelegramBot. Этот пример бота будет повторять сообщение пользователю. Введите /menu для вызова меню.";
-
-        execute(SendMessage.builder()
-                .chatId(msg.getChatId())
-                .text(onStartText)
-                .build()
-        );
-    }
-
-    protected String formatUserName(User user) {
+    public String formatUserName(User user) {
         String userName = user.getFirstName() + "@" + (user.getUserName() != null ? user.getUserName() : user.getId().toString());
         return userName;
     }
 
-    protected void updateMessage(Long chatId, int messageId, String text, InlineKeyboardMarkup replyMarkup) throws TelegramApiException {
+    public void updateMessage(Long chatId, int messageId, String text, InlineKeyboardMarkup replyMarkup) throws TelegramApiException {
         if (text != null) {
             EditMessageText.EditMessageTextBuilder editMessageTextBuilder = EditMessageText.builder()
                     .chatId(chatId)
