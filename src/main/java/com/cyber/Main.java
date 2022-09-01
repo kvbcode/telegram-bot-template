@@ -1,8 +1,11 @@
 package com.cyber;
 
+import com.cyber.telegram.bot.markup.RootMenuMarkup;
+import com.cyber.telegram.bot.markup.SubMenuMarkup;
 import com.cyber.util.command.CommandHandler;
 import org.telegram.telegrambots.meta.TelegramBotsApi;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
+import org.telegram.telegrambots.meta.api.objects.CallbackQuery;
 import org.telegram.telegrambots.meta.api.objects.Message;
 import org.telegram.telegrambots.updatesreceivers.DefaultBotSession;
 
@@ -41,10 +44,28 @@ public class Main {
             Message result = myTelegramBot.execute(SendMessage.builder()
                     .chatId(msg.getChatId())
                     .text("Нажмите на кнопки ниже, чтобы проверить реакцию на события.")
-                    .replyMarkup(myTelegramBot.rootMenuMarkup())
+                    .replyMarkup(RootMenuMarkup.getInstance())
                     .build());
             myTelegramBot.saveLastMessageId(msg.getChatId(), result.getMessageId());
         });
+
+        CommandHandler<CallbackQuery> callbackQueryHandler = myTelegramBot.getCallbackQueryHandler();
+
+        callbackQueryHandler.register("but:submenu", callbackQuery -> {
+            Long chatId = callbackQuery.getMessage().getChatId();
+            myTelegramBot.updateMessage(chatId, myTelegramBot.getLastMesageId(chatId), "Демонстрация подменю", SubMenuMarkup.getInstance());
+        });
+
+        callbackQueryHandler.register("but:rootmenu", callbackQuery -> {
+            Long chatId = callbackQuery.getMessage().getChatId();
+            myTelegramBot.updateMessage(chatId, myTelegramBot.getLastMesageId(chatId), "Нажмите на кнопки ниже, чтобы проверить реакцию на события.", RootMenuMarkup.getInstance());
+        });
+
+        callbackQueryHandler.register("but:image", callbackQuery -> {
+            Long chatId = callbackQuery.getMessage().getChatId();
+            myTelegramBot.sendImageFile(chatId, "image.jpg");
+        });
+
 
     }
 

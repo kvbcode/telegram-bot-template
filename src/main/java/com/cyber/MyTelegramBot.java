@@ -3,17 +3,14 @@ package com.cyber;
 import com.cyber.util.command.CommandHandler;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.api.methods.AnswerCallbackQuery;
-import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.methods.send.SendPhoto;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageReplyMarkup;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText;
 import org.telegram.telegrambots.meta.api.objects.*;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
-import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
 import java.io.File;
-import java.util.Arrays;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -21,7 +18,7 @@ public class MyTelegramBot extends TelegramLongPollingBot {
 
     private final String securityToken;
     private final String name;
-    private Map<Long,Integer> lastMessageIdMap = new ConcurrentHashMap<>();
+    private Map<Long, Integer> lastMessageIdMap = new ConcurrentHashMap<>();
 
     private CommandHandler<Message> textMessageHandler = new CommandHandler<>();
     private CommandHandler<CallbackQuery> callbackQueryHandler = new CommandHandler<>();
@@ -72,7 +69,7 @@ public class MyTelegramBot extends TelegramLongPollingBot {
         lastMessageIdMap.put(chatId, messageId);
     }
 
-    public Integer getLastMesageId(Long chatId){
+    public Integer getLastMesageId(Long chatId) {
         return lastMessageIdMap.get(chatId);
     }
 
@@ -84,44 +81,15 @@ public class MyTelegramBot extends TelegramLongPollingBot {
         return callbackQueryHandler;
     }
 
-    protected void onCallbackQuery(CallbackQuery callbackQuery) throws TelegramApiException {
-        Message msg = callbackQuery.getMessage();
-        Long chatId = msg.getChatId();
-        String command = callbackQuery.getData();
-
-        String text = "нажата кнопка " + command;
-        System.out.println(text);
-
-        AnswerCallbackQuery callbackResponse = AnswerCallbackQuery.builder()
+    protected void onCallbackQuery(CallbackQuery callbackQuery) throws Exception {
+        executeAsync(AnswerCallbackQuery.builder()
                 .callbackQueryId(callbackQuery.getId())
-                .text(text)
-                .build();
-        execute(callbackResponse);
+                .build());
+        callbackQueryHandler.invoke(callbackQuery.getData(), callbackQuery);
+    }
 
-        if ("but:submenu".equals(command)) {
-            InlineKeyboardButton backButton = InlineKeyboardButton.builder()
-                    .text("<< Вернуться")
-                    .callbackData("but:rootmenu")
-                    .build();
-
-            InlineKeyboardMarkup submenuMarkup = InlineKeyboardMarkup.builder()
-                    .keyboardRow(Arrays.asList(backButton))
-                    .build();
-
-            updateMessage(chatId, getLastMesageId(chatId), "Демонстрация подменю", submenuMarkup);
-            return;
-        }
-
-        if ("but:rootmenu".equals(command)) {
-            updateMessage(chatId, getLastMesageId(chatId), "Нажмите на кнопки ниже, чтобы проверить реакцию на события.", rootMenuMarkup());
-            return;
-        }
-
-        if ("but:image".equals(command)) {
-            sendImageFile(msg.getChatId(), "image.jpg");
-            return;
-        }
-
+    protected void onTextMessage(Message msg) throws Exception {
+        textMessageHandler.invoke(msg.getText(), msg);
     }
 
     public void sendImageFile(Long chatId, String filename) throws TelegramApiException {
@@ -130,32 +98,6 @@ public class MyTelegramBot extends TelegramLongPollingBot {
                 .chatId(chatId)
                 .photo(inputFile)
                 .build());
-    }
-
-    protected void onTextMessage(Message msg) throws Exception {
-        textMessageHandler.invoke(msg.getText(), msg);
-    }
-
-    public InlineKeyboardMarkup rootMenuMarkup() {
-        InlineKeyboardButton helloButton = InlineKeyboardButton.builder()
-                .text("Hello").callbackData("but:hello").build();
-
-        InlineKeyboardButton hiButton = InlineKeyboardButton.builder()
-                .text("Hi").callbackData("but:hi").build();
-
-        InlineKeyboardButton imageButton = InlineKeyboardButton.builder()
-                .text("Image").callbackData("but:image").build();
-
-        InlineKeyboardButton submenuButton = InlineKeyboardButton.builder()
-                .text("Submenu").callbackData("but:submenu").build();
-
-        InlineKeyboardMarkup keyboardMarkup = InlineKeyboardMarkup.builder()
-                .keyboardRow(Arrays.asList(helloButton, hiButton))
-                .keyboardRow(Arrays.asList(imageButton))
-                .keyboardRow(Arrays.asList(submenuButton))
-                .build();
-
-        return keyboardMarkup;
     }
 
     public String formatUserName(User user) {
